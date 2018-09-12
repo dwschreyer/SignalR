@@ -7,6 +7,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
 public class HubConnection {
@@ -24,6 +26,7 @@ public class HubConnection {
     private NegotiateResponse negotiateResponse;
     private String accessToken;
     private Map<String, String> headers = new HashMap<>();
+    private HashMap<String, CompletableFuture<Object>> pendingInvocations = new HashMap<>();
     private ConnectionState connectionState = null;
 
     private static ArrayList<Class<?>> emptyArray = new ArrayList<>();
@@ -83,10 +86,14 @@ public class HubConnection {
                     case PING:
                         // We don't need to do anything in the case of a ping message.
                         break;
+                    case COMPLETION:
+                        CompletionMessage completionMessage = (CompletionMessage)message;
+                        CompletableFuture<Object> future = pendingInvocations.get(completionMessage.invocationId);
+                        future.complete(completionMessage.result);
+                        break;
                     case STREAM_INVOCATION:
                     case STREAM_ITEM:
                     case CANCEL_INVOCATION:
-                    case COMPLETION:
                         logger.log(LogLevel.Error, "This client does not support %s messages.", message.getMessageType());
 
                         throw new UnsupportedOperationException(String.format("The message type %s is not supported yet.", message.getMessageType()));
@@ -244,9 +251,45 @@ public class HubConnection {
         }
 
         InvocationMessage invocationMessage = new InvocationMessage(method, args);
-        String message = protocol.writeMessage(invocationMessage);
-        logger.log(LogLevel.Debug, "Sending message");
-        transport.send(message);
+        sendHubMessage(invocationMessage);
+    }
+
+    public <T> CompletableFuture<T> invoke(Class<T> returnType, String method, Object... args) throws Exception {
+        InvocationMessage invocationMessage = new InvocationMessage(method, args);
+        String id = getNextId();
+        invocationMessage.setInvocationId(id);
+        sendHubMessage(invocationMessage);
+        CompletableFuture<T> future = new CompletableFuture<>();
+
+        pendingInvocations.compute(id, (k, v) -> {
+            if (v != null) {
+                throw new IllegalStateException("Invocation Id is already used");
+            }
+
+            CompletableFuture<Object> pendingCall = new CompletableFuture<Object>();
+            pendingCall.thenAccept((f) -> {
+                if (returnType.isPrimitive()) {
+                    future.complete((T)f);
+                } else {
+                    future.complete(returnType.cast(f));
+                }
+            });
+            return pendingCall;
+        });
+
+        return future;
+    }
+
+    private String getNextId() {
+        AtomicInteger c = new AtomicInteger(0);
+        int i = c.incrementAndGet();
+        return Integer.toString(i);
+    }
+
+    private void sendHubMessage(HubMessage message) throws Exception {
+        String serializedMessage = protocol.writeMessage(message);
+        logger.log(LogLevel.Debug, "Sending message.");
+        transport.send(serializedMessage);
     }
 
     /**
