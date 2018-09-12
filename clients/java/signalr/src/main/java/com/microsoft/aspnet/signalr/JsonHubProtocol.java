@@ -45,6 +45,7 @@ class JsonHubProtocol implements HubProtocol {
             String error = null;
             ArrayList<Object> arguments = null;
             JsonArray argumentsToken = null;
+            Object result = null;
 
             JsonReader reader = new JsonReader(new StringReader(str));
             reader.beginObject();
@@ -65,7 +66,7 @@ class JsonHubProtocol implements HubProtocol {
                         error = reader.nextString();
                         break;
                     case "result":
-                        reader.skipValue();
+                        result = gson.fromJson(reader, int.class);
                         break;
                     case "item":
                         reader.skipValue();
@@ -115,8 +116,6 @@ class JsonHubProtocol implements HubProtocol {
                     }
                     break;
                 case COMPLETION:
-                    Object result = gson.fromJson(jsonMessage.get("result"), int.class);
-                    String invocationId = jsonMessage.get("invocationId").getAsString();
                     hubMessages.add(new CompletionMessage(invocationId, result, ""));
                     break;
                 case STREAM_INVOCATION:

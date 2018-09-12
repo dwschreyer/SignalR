@@ -28,6 +28,7 @@ public class HubConnection {
     private Map<String, String> headers = new HashMap<>();
     private HashMap<String, CompletableFuture<Object>> pendingInvocations = new HashMap<>();
     private ConnectionState connectionState = null;
+    private AtomicInteger nextId = new AtomicInteger(0);
 
     private static ArrayList<Class<?>> emptyArray = new ArrayList<>();
     private static int MAX_NEGOTIATE_ATTEMPTS = 100;
@@ -258,7 +259,6 @@ public class HubConnection {
         InvocationMessage invocationMessage = new InvocationMessage(method, args);
         String id = getNextId();
         invocationMessage.setInvocationId(id);
-        sendHubMessage(invocationMessage);
         CompletableFuture<T> future = new CompletableFuture<>();
 
         pendingInvocations.compute(id, (k, v) -> {
@@ -268,6 +268,7 @@ public class HubConnection {
 
             CompletableFuture<Object> pendingCall = new CompletableFuture<Object>();
             pendingCall.thenAccept((f) -> {
+                // Primitive types can't be cast with the Object cast function
                 if (returnType.isPrimitive()) {
                     future.complete((T)f);
                 } else {
@@ -277,12 +278,15 @@ public class HubConnection {
             return pendingCall;
         });
 
+        // Make sure the actual send is after setting up the future otherwise there is a race
+        // where the map doesn't have the future yet when the response is returned
+        sendHubMessage(invocationMessage);
+
         return future;
     }
 
     private String getNextId() {
-        AtomicInteger c = new AtomicInteger(0);
-        int i = c.incrementAndGet();
+        int i = nextId.incrementAndGet();
         return Integer.toString(i);
     }
 
