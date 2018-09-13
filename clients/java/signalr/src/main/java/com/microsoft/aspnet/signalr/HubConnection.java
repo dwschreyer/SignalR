@@ -219,10 +219,15 @@ public class HubConnection {
 
         transport.stop();
         hubConnectionState = HubConnectionState.DISCONNECTED;
+
+        HubException hubException = null;
+        if (errorMessage != null) {
+            hubException = new HubException(errorMessage);
+        }
+        connectionState.cancelOutstandingInvocations(hubException);
         connectionState = null;
         logger.log(LogLevel.Information, "HubConnection stopped.");
         if (onClosedCallbackList != null) {
-            HubException hubException = new HubException(errorMessage);
             for (Consumer<Exception> callback : onClosedCallbackList) {
                 callback.accept(hubException);
             }
@@ -592,6 +597,16 @@ public class HubConnection {
         public String getNextId() {
             int i = nextId.incrementAndGet();
             return Integer.toString(i);
+        }
+
+        public void cancelOutstandingInvocations(Exception ex) {
+            pendingInvocations.forEach((k, v) -> {
+                if (ex == null) {
+                    v.dispose();
+                } else {
+                    v.fail(ex);
+                }
+            });
         }
 
         @Override

@@ -21,6 +21,14 @@ class InvocationRequest {
         }
     }
 
+    public void fail(Exception ex) {
+        pendingCall.completeExceptionally(ex);
+    }
+
+    public void dispose() {
+        pendingCall.cancel(false);
+    }
+
     public CompletableFuture<Object> getPendingCall() {
         return pendingCall;
     }
