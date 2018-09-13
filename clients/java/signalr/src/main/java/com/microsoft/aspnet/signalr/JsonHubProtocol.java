@@ -123,7 +123,7 @@ class JsonHubProtocol implements HubProtocol {
                     if (resultToken != null) {
                         result = gson.fromJson(resultToken, binder.getReturnType(invocationId));
                     }
-                    hubMessages.add(new CompletionMessage(invocationId, result, ""));
+                    hubMessages.add(new CompletionMessage(invocationId, result, error));
                     break;
                 case STREAM_INVOCATION:
                 case STREAM_ITEM:

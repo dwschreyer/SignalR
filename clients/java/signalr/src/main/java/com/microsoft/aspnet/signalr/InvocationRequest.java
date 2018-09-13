@@ -6,10 +6,26 @@ package com.microsoft.aspnet.signalr;
 import java.util.concurrent.CompletableFuture;
 
 class InvocationRequest {
-    Class<?> returnType;
-    CompletableFuture<Object> pendingCall = new CompletableFuture<>();
+    private Class<?> returnType;
+    private CompletableFuture<Object> pendingCall = new CompletableFuture<>();
 
     InvocationRequest(Class<?> returnType) {
         this.returnType = returnType;
+    }
+
+    public void complete(CompletionMessage completion) {
+        if (completion.getResult() != null) {
+            pendingCall.complete(completion.getResult());
+        } else {
+            pendingCall.completeExceptionally(new HubException(completion.getError()));
+        }
+    }
+
+    public CompletableFuture<Object> getPendingCall() {
+        return pendingCall;
+    }
+
+    public Class<?> getReturnType() {
+        return returnType;
     }
 }

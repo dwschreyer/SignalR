@@ -390,6 +390,31 @@ public class HubConnectionTest {
         assertEquals(42, result.get(), 0);
     }
 
+    @Test
+    public void completionMessageCanHaveError() throws Exception {
+        MockTransport mockTransport = new MockTransport();
+        HubConnection hubConnection = new HubConnection("http://example.com", mockTransport, true);
+
+        hubConnection.start();
+        mockTransport.receiveMessage("{}" + RECORD_SEPARATOR);
+
+        CompletableFuture<Integer> result = hubConnection.invoke(int.class, "echo", "message");
+        assertFalse(result.isDone());
+
+        mockTransport.receiveMessage("{\"type\":3,\"invocationId\":\"1\",\"error\":\"There was an error\"}" + RECORD_SEPARATOR);
+        assertTrue(result.isDone());
+
+        String exceptionMessage = null;
+        try {
+            result.get();
+            assertFalse(true);
+        } catch (Exception ex) {
+            exceptionMessage = ex.getMessage();
+        }
+
+        assertEquals("com.microsoft.aspnet.signalr.HubException: There was an error", exceptionMessage);
+    }
+
     // We're using AtomicReference<Double> in the send tests instead of int here because Gson has trouble deserializing to Integer
     @Test
     public void sendWithNoParamsTriggersOnHandler() throws Exception {

@@ -87,8 +87,8 @@ public class HubConnection {
                         break;
                     case COMPLETION:
                         CompletionMessage completionMessage = (CompletionMessage)message;
-                        CompletableFuture<Object> future = connectionState.pendingInvocations.get(completionMessage.invocationId).pendingCall;
-                        future.complete(completionMessage.result);
+                        InvocationRequest irq = connectionState.pendingInvocations.get(completionMessage.invocationId);
+                        irq.complete(completionMessage);
                         break;
                     case STREAM_INVOCATION:
                     case STREAM_ITEM:
@@ -266,14 +266,19 @@ public class HubConnection {
             }
 
             InvocationRequest irq = new InvocationRequest(returnType);
-            irq.pendingCall.thenAccept((f) -> {
+            CompletableFuture<Object> pendingCall = irq.getPendingCall();
+            // forward the invocation result to the user
+            pendingCall.thenAccept((returnValue) -> {
                 // Primitive types can't be cast with the Object cast function
                 if (returnType.isPrimitive()) {
-                    future.complete((T)f);
+                    future.complete((T)returnValue);
                 } else {
-                    future.complete(returnType.cast(f));
+                    future.complete(returnType.cast(returnValue));
                 }
             });
+
+            // forward any exceptions to the user
+            pendingCall.exceptionally((ex) -> future.completeExceptionally(ex));
 
             return irq;
         });
@@ -596,7 +601,7 @@ public class HubConnection {
                 return null;
             }
 
-            return irq.returnType;
+            return irq.getReturnType();
         }
 
         @Override
