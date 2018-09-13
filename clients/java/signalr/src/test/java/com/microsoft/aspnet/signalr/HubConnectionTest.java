@@ -6,6 +6,7 @@ package com.microsoft.aspnet.signalr;
 import static org.junit.Assert.*;
 
 import java.util.ArrayList;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -429,15 +430,15 @@ public class HubConnectionTest {
         hubConnection.stop();
         assertTrue(result.isDone());
 
-        String exceptionMessage = null;
+        boolean hasException = false;
         try {
             result.get();
             assertFalse(true);
-        } catch (Exception ex) {
-            exceptionMessage = ex.getMessage();
+        } catch (CancellationException ex) {
+            hasException = true;
         }
 
-        assertEquals("com.microsoft.aspnet.signalr.HubException", exceptionMessage);
+        assertTrue(hasException);
     }
 
     // We're using AtomicReference<Double> in the send tests instead of int here because Gson has trouble deserializing to Integer
