@@ -26,9 +26,7 @@ public class HubConnection {
     private NegotiateResponse negotiateResponse;
     private String accessToken;
     private Map<String, String> headers = new HashMap<>();
-    private HashMap<String, CompletableFuture<Object>> pendingInvocations = new HashMap<>();
     private ConnectionState connectionState = null;
-    private AtomicInteger nextId = new AtomicInteger(0);
 
     private static ArrayList<Class<?>> emptyArray = new ArrayList<>();
     private static int MAX_NEGOTIATE_ATTEMPTS = 100;
@@ -89,7 +87,7 @@ public class HubConnection {
                         break;
                     case COMPLETION:
                         CompletionMessage completionMessage = (CompletionMessage)message;
-                        CompletableFuture<Object> future = pendingInvocations.get(completionMessage.invocationId);
+                        CompletableFuture<Object> future = connectionState.pendingInvocations.get(completionMessage.invocationId).pendingCall;
                         future.complete(completionMessage.result);
                         break;
                     case STREAM_INVOCATION:
@@ -257,17 +255,18 @@ public class HubConnection {
 
     public <T> CompletableFuture<T> invoke(Class<T> returnType, String method, Object... args) throws Exception {
         InvocationMessage invocationMessage = new InvocationMessage(method, args);
-        String id = getNextId();
+        String id = connectionState.getNextId();
         invocationMessage.setInvocationId(id);
         CompletableFuture<T> future = new CompletableFuture<>();
 
-        pendingInvocations.compute(id, (k, v) -> {
+        connectionState.pendingInvocations.compute(id, (k, v) -> {
             if (v != null) {
+                // This should never happen
                 throw new IllegalStateException("Invocation Id is already used");
             }
 
-            CompletableFuture<Object> pendingCall = new CompletableFuture<Object>();
-            pendingCall.thenAccept((f) -> {
+            InvocationRequest irq = new InvocationRequest(returnType);
+            irq.pendingCall.thenAccept((f) -> {
                 // Primitive types can't be cast with the Object cast function
                 if (returnType.isPrimitive()) {
                     future.complete((T)f);
@@ -275,7 +274,8 @@ public class HubConnection {
                     future.complete(returnType.cast(f));
                 }
             });
-            return pendingCall;
+
+            return irq;
         });
 
         // Make sure the actual send is after setting up the future otherwise there is a race
@@ -283,11 +283,6 @@ public class HubConnection {
         sendHubMessage(invocationMessage);
 
         return future;
-    }
-
-    private String getNextId() {
-        int i = nextId.incrementAndGet();
-        return Integer.toString(i);
     }
 
     private void sendHubMessage(HubMessage message) throws Exception {
@@ -581,15 +576,27 @@ public class HubConnection {
     }
 
     private class ConnectionState implements InvocationBinder {
-        HubConnection connection;
+        private HubConnection connection;
+        private AtomicInteger nextId = new AtomicInteger(0);
+        private HashMap<String, InvocationRequest> pendingInvocations = new HashMap<>();
 
         public ConnectionState(HubConnection connection) {
             this.connection = connection;
         }
 
+        public String getNextId() {
+            int i = nextId.incrementAndGet();
+            return Integer.toString(i);
+        }
+
         @Override
         public Class<?> getReturnType(String invocationId) {
-            return null;
+            InvocationRequest irq = pendingInvocations.get(invocationId);
+            if (irq == null) {
+                return null;
+            }
+
+            return irq.returnType;
         }
 
         @Override

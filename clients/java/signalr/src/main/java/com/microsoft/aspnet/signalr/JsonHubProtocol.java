@@ -3,16 +3,15 @@
 
 package com.microsoft.aspnet.signalr;
 
-import java.io.IOException;
 import java.io.StringReader;
 import java.util.ArrayList;
 import java.util.List;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 import com.google.gson.stream.JsonReader;
-import com.google.gson.stream.JsonToken;
 
 class JsonHubProtocol implements HubProtocol {
     private final JsonParser jsonParser = new JsonParser();
@@ -46,6 +45,7 @@ class JsonHubProtocol implements HubProtocol {
             ArrayList<Object> arguments = null;
             JsonArray argumentsToken = null;
             Object result = null;
+            JsonElement resultToken = null;
 
             JsonReader reader = new JsonReader(new StringReader(str));
             reader.beginObject();
@@ -66,7 +66,11 @@ class JsonHubProtocol implements HubProtocol {
                         error = reader.nextString();
                         break;
                     case "result":
-                        result = gson.fromJson(reader, int.class);
+                        if (invocationId == null) {
+                            resultToken = jsonParser.parse(reader);
+                        } else {
+                            result = gson.fromJson(reader, binder.getReturnType(invocationId));
+                        }
                         break;
                     case "item":
                         reader.skipValue();
@@ -116,6 +120,9 @@ class JsonHubProtocol implements HubProtocol {
                     }
                     break;
                 case COMPLETION:
+                    if (resultToken != null) {
+                        result = gson.fromJson(resultToken, binder.getReturnType(invocationId));
+                    }
                     hubMessages.add(new CompletionMessage(invocationId, result, ""));
                     break;
                 case STREAM_INVOCATION:

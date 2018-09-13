@@ -6,6 +6,7 @@ package com.microsoft.aspnet.signalr;
 import static org.junit.Assert.*;
 
 import java.util.ArrayList;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.Rule;
@@ -304,10 +305,89 @@ public class HubConnectionTest {
         hubConnection.start();
         mockTransport.receiveMessage("{}" + RECORD_SEPARATOR);
         mockTransport.receiveMessage("{\"type\":1,\"target\":\"add\",\"arguments\":[12]}" + RECORD_SEPARATOR);
-        hubConnection.send("add", 12);
 
         // Confirming that our handler was called and the correct message was passed in.
         assertEquals(24, value.get(), 0);
+    }
+
+    @Test
+    public void invokeWaitsForCompletionMessage() throws Exception {
+        MockTransport mockTransport = new MockTransport();
+        HubConnection hubConnection = new HubConnection("http://example.com", mockTransport, true);
+
+        hubConnection.start();
+        mockTransport.receiveMessage("{}" + RECORD_SEPARATOR);
+
+        CompletableFuture<Integer> result = hubConnection.invoke(Integer.class, "echo", "message");
+        assertEquals("{\"type\":1,\"invocationId\":\"1\",\"target\":\"echo\",\"arguments\":[\"message\"]}" + RECORD_SEPARATOR, mockTransport.sentMessages.get(1));
+        assertFalse(result.isDone());
+
+        mockTransport.receiveMessage("{\"type\":3,\"invocationId\":\"1\",\"result\":42}" + RECORD_SEPARATOR);
+        assertTrue(result.isDone());
+
+        assertEquals(42, result.get(), 0);
+    }
+
+    @Test
+    public void multipleInvokesWaitForOwnCompletionMessage() throws Exception {
+        MockTransport mockTransport = new MockTransport();
+        HubConnection hubConnection = new HubConnection("http://example.com", mockTransport, true);
+
+        hubConnection.start();
+        mockTransport.receiveMessage("{}" + RECORD_SEPARATOR);
+
+        CompletableFuture<Integer> result = hubConnection.invoke(Integer.class, "echo", "message");
+        CompletableFuture<String> result2 = hubConnection.invoke(String.class, "echo", "message");
+        assertEquals("{\"type\":1,\"invocationId\":\"1\",\"target\":\"echo\",\"arguments\":[\"message\"]}" + RECORD_SEPARATOR, mockTransport.sentMessages.get(1));
+        assertEquals("{\"type\":1,\"invocationId\":\"2\",\"target\":\"echo\",\"arguments\":[\"message\"]}" + RECORD_SEPARATOR, mockTransport.sentMessages.get(2));
+        assertFalse(result.isDone());
+        assertFalse(result2.isDone());
+
+        mockTransport.receiveMessage("{\"type\":3,\"invocationId\":\"2\",\"result\":\"message\"}" + RECORD_SEPARATOR);
+        assertTrue(result2.isDone());
+        assertFalse(result.isDone());
+
+        mockTransport.receiveMessage("{\"type\":3,\"invocationId\":\"1\",\"result\":42}" + RECORD_SEPARATOR);
+        assertTrue(result.isDone());
+
+        assertEquals(42, result.get(), 0);
+        assertEquals("message", result2.get());
+    }
+
+    @Test
+    public void completionMessageValuesCanBeOutOfOrder() throws Exception {
+        MockTransport mockTransport = new MockTransport();
+        HubConnection hubConnection = new HubConnection("http://example.com", mockTransport, true);
+
+        hubConnection.start();
+        mockTransport.receiveMessage("{}" + RECORD_SEPARATOR);
+
+        CompletableFuture<Integer> result = hubConnection.invoke(Integer.class, "echo", "message");
+        assertFalse(result.isDone());
+
+        mockTransport.receiveMessage("{\"type\":3,\"result\":42,\"invocationId\":\"1\"}" + RECORD_SEPARATOR);
+        assertTrue(result.isDone());
+
+        assertEquals(42, result.get(), 0);
+    }
+
+    @Test
+    public void invokeWorksForPrimitiveTypes() throws Exception {
+        MockTransport mockTransport = new MockTransport();
+        HubConnection hubConnection = new HubConnection("http://example.com", mockTransport, true);
+
+        hubConnection.start();
+        mockTransport.receiveMessage("{}" + RECORD_SEPARATOR);
+
+        // int.class is a primitive type and since we use Class.cast to cast an Object to the expected return type
+        // which does not work for primitives we have to write special logic for that case.
+        CompletableFuture<Integer> result = hubConnection.invoke(int.class, "echo", "message");
+        assertFalse(result.isDone());
+
+        mockTransport.receiveMessage("{\"type\":3,\"invocationId\":\"1\",\"result\":42}" + RECORD_SEPARATOR);
+        assertTrue(result.isDone());
+
+        assertEquals(42, result.get(), 0);
     }
 
     // We're using AtomicReference<Double> in the send tests instead of int here because Gson has trouble deserializing to Integer

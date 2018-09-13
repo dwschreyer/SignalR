@@ -146,16 +146,6 @@ public class JsonHubProtocolTest {
     }
 
     @Test
-    public void parseSingleUnsupportedCompletionMessage() throws Exception {
-        exceptionRule.expect(UnsupportedOperationException.class);
-        exceptionRule.expectMessage("The message type COMPLETION is not supported yet.");
-        String stringifiedMessage = "{\"type\":3,\"invocationId\":123}\u001E";
-        TestBinder binder = new TestBinder(null);
-
-        HubMessage[] messages = jsonHubProtocol.parseMessages(stringifiedMessage, binder);
-    }
-
-    @Test
     public void parseTwoMessages() throws Exception {
         String twoMessages = "{\"type\":1,\"target\":\"one\",\"arguments\":[42]}\u001E{\"type\":1,\"target\":\"two\",\"arguments\":[43]}\u001E";
         TestBinder binder = new TestBinder(new InvocationMessage("one", new Object[] { 42 }));
