@@ -302,7 +302,7 @@ public class HubConnection {
     private void sendHubMessage(HubMessage message) throws Exception {
         String serializedMessage = protocol.writeMessage(message);
         if (message.getMessageType() == HubMessageType.INVOCATION) {
-            logger.log(LogLevel.Debug, "Sending %d message %s.", message.getMessageType().value, ((InvocationMessage)message).getInvocationId());
+            logger.log(LogLevel.Debug, "Sending %d message '%s'.", message.getMessageType().value, ((InvocationMessage)message).getInvocationId());
         } else {
             logger.log(LogLevel.Debug, "Sending %d message.", message.getMessageType().value);
         }
