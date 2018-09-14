@@ -68,13 +68,13 @@ public class HubConnection {
                 switch (message.getMessageType()) {
                     case INVOCATION:
                         InvocationMessage invocationMessage = (InvocationMessage) message;
-                        List<InvocationHandler> handlers = this.handlers.get(invocationMessage.target);
+                        List<InvocationHandler> handlers = this.handlers.get(invocationMessage.getTarget());
                         if (handlers != null) {
                             for (InvocationHandler handler : handlers) {
-                                handler.getAction().invoke(invocationMessage.arguments);
+                                handler.getAction().invoke(invocationMessage.getArguments());
                             }
                         } else {
-                            logger.log(LogLevel.Warning, "Failed to find handler for %s method.", invocationMessage.target);
+                            logger.log(LogLevel.Warning, "Failed to find handler for %s method.", invocationMessage.getMessageType());
                         }
                         break;
                     case CLOSE:
@@ -87,7 +87,11 @@ public class HubConnection {
                         break;
                     case COMPLETION:
                         CompletionMessage completionMessage = (CompletionMessage)message;
-                        InvocationRequest irq = connectionState.pendingInvocations.get(completionMessage.invocationId);
+                        InvocationRequest irq = connectionState.pendingInvocations.get(completionMessage.getInvocationId());
+                        if (irq == null) {
+                            logger.log(LogLevel.Warning, "Dropped unsolicited Completion message for invocation '%s'.", completionMessage.getInvocationId());
+                            continue;
+                        }
                         irq.complete(completionMessage);
                         break;
                     case STREAM_INVOCATION:
@@ -274,7 +278,7 @@ public class HubConnection {
             CompletableFuture<Object> pendingCall = irq.getPendingCall();
             // forward the invocation result to the user
             pendingCall.thenAccept((returnValue) -> {
-                // Primitive types can't be cast with the Object cast function
+                // Primitive types can't be cast with the Class cast function
                 if (returnType.isPrimitive()) {
                     future.complete((T)returnValue);
                 } else {
@@ -297,7 +301,11 @@ public class HubConnection {
 
     private void sendHubMessage(HubMessage message) throws Exception {
         String serializedMessage = protocol.writeMessage(message);
-        logger.log(LogLevel.Debug, "Sending message.");
+        if (message.getMessageType() == HubMessageType.INVOCATION) {
+            logger.log(LogLevel.Debug, "Sending %d message %s.", message.getMessageType().value, ((InvocationMessage)message).getInvocationId());
+        } else {
+            logger.log(LogLevel.Debug, "Sending %d message.", message.getMessageType().value);
+        }
         transport.send(serializedMessage);
     }
 

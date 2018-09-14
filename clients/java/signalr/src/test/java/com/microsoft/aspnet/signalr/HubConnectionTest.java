@@ -356,23 +356,6 @@ public class HubConnectionTest {
     }
 
     @Test
-    public void completionMessageValuesCanBeOutOfOrder() throws Exception {
-        MockTransport mockTransport = new MockTransport();
-        HubConnection hubConnection = new HubConnection("http://example.com", mockTransport, true);
-
-        hubConnection.start();
-        mockTransport.receiveMessage("{}" + RECORD_SEPARATOR);
-
-        CompletableFuture<Integer> result = hubConnection.invoke(Integer.class, "echo", "message");
-        assertFalse(result.isDone());
-
-        mockTransport.receiveMessage("{\"type\":3,\"result\":42,\"invocationId\":\"1\"}" + RECORD_SEPARATOR);
-        assertTrue(result.isDone());
-
-        assertEquals(42, result.get(), 0);
-    }
-
-    @Test
     public void invokeWorksForPrimitiveTypes() throws Exception {
         MockTransport mockTransport = new MockTransport();
         HubConnection hubConnection = new HubConnection("http://example.com", mockTransport, true);

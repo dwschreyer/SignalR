@@ -5,9 +5,9 @@ package com.microsoft.aspnet.signalr;
 
 class CompletionMessage extends HubMessage {
     int type = HubMessageType.COMPLETION.value;
-    String invocationId;
-    Object result;
-    String error;
+    private String invocationId;
+    private Object result;
+    private String error;
 
     public CompletionMessage(String invocationId, Object result, String error) {
         if (error != null && result != null)
@@ -25,6 +25,10 @@ class CompletionMessage extends HubMessage {
 
     public String getError() {
         return error;
+    }
+
+    public String getInvocationId() {
+        return invocationId;
     }
 
     @Override

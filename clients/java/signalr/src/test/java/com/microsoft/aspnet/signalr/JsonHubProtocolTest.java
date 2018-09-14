@@ -214,8 +214,24 @@ public class JsonHubProtocolTest {
         assertEquals(24, messageResult2);
     }
 
+    @Test
+    public void parseCompletionMessageWithOutOfOrderProperties() throws Exception {
+        String stringifiedMessage = "{\"type\":3,\"result\":42,\"invocationId\":\"1\"}\u001E";
+        TestBinder binder = new TestBinder(new CompletionMessage("1", 42, null));
+
+        HubMessage[] messages = jsonHubProtocol.parseMessages(stringifiedMessage, binder);
+
+        // We know it's only one message
+        assertEquals(HubMessageType.COMPLETION, messages[0].getMessageType());
+
+        CompletionMessage message = (CompletionMessage) messages[0];
+        assertEquals(null, message.getError());
+        assertEquals(42 , message.getResult());
+    }
+
     private class TestBinder implements InvocationBinder {
         private Class<?>[] paramTypes = null;
+        private Class<?> returnType = null;
 
         public TestBinder(HubMessage expectedMessage) {
             if (expectedMessage == null) {
@@ -239,6 +255,9 @@ public class JsonHubProtocolTest {
                     break;
                 case STREAM_ITEM:
                     break;
+                case COMPLETION:
+                    returnType = ((CompletionMessage)expectedMessage).getResult().getClass();
+                    break;
                 default:
                     break;
             }
@@ -246,7 +265,7 @@ public class JsonHubProtocolTest {
 
         @Override
         public Class<?> getReturnType(String invocationId) {
-            return null;
+            return returnType;
         }
 
         @Override
