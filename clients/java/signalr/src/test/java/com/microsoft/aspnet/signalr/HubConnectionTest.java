@@ -8,6 +8,7 @@ import static org.junit.Assert.*;
 import java.util.ArrayList;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.Rule;
@@ -324,9 +325,8 @@ public class HubConnectionTest {
         assertFalse(result.isDone());
 
         mockTransport.receiveMessage("{\"type\":3,\"invocationId\":\"1\",\"result\":42}" + RECORD_SEPARATOR);
-        assertTrue(result.isDone());
 
-        assertEquals(42, result.get(), 0);
+        assertEquals(42, result.get(1000L, TimeUnit.MILLISECONDS), 0);
     }
 
     @Test
@@ -345,14 +345,11 @@ public class HubConnectionTest {
         assertFalse(result2.isDone());
 
         mockTransport.receiveMessage("{\"type\":3,\"invocationId\":\"2\",\"result\":\"message\"}" + RECORD_SEPARATOR);
-        assertTrue(result2.isDone());
+        assertEquals("message", result2.get(1000L, TimeUnit.MILLISECONDS));
         assertFalse(result.isDone());
 
         mockTransport.receiveMessage("{\"type\":3,\"invocationId\":\"1\",\"result\":42}" + RECORD_SEPARATOR);
-        assertTrue(result.isDone());
-
-        assertEquals(42, result.get(), 0);
-        assertEquals("message", result2.get());
+        assertEquals(42, result.get(1000L, TimeUnit.MILLISECONDS), 0);
     }
 
     @Test
@@ -369,9 +366,8 @@ public class HubConnectionTest {
         assertFalse(result.isDone());
 
         mockTransport.receiveMessage("{\"type\":3,\"invocationId\":\"1\",\"result\":42}" + RECORD_SEPARATOR);
-        assertTrue(result.isDone());
 
-        assertEquals(42, result.get(), 0);
+        assertEquals(42, result.get(1000L, TimeUnit.MILLISECONDS), 0);
     }
 
     @Test
